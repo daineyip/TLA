@@ -1,4 +1,8 @@
 -------------------------------- MODULE echo_multimessage --------------------------------
+
+\* This is a single-sender, single-server echo implementation.
+\* Capable of the client sending arbitrary amount of string n messages in messageSet, to the server, and successfully receiving n echos where m'_n = m_n
+
 EXTENDS Integers, Sequences, TLC, FiniteSets
 CONSTANT messageSet
 
@@ -265,5 +269,5 @@ Termination == <>(\A self \in ProcSet: pc[self] = "Done")
 
 =============================================================================
 \* Modification History
-\* Last modified Mon Oct 20 23:11:27 PDT 2025 by daineyip
+\* Last modified Mon Oct 20 23:17:55 PDT 2025 by daineyip
 \* Created Tue Sep 23 19:42:59 PDT 2025 by daineyip
