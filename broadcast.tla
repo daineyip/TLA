@@ -1,16 +1,18 @@
 ----------------------------- MODULE broadcast -----------------------------
-\* TODO
+\* This is a basic broadcast protocol
+\* Capable of handling an arbitrary number of clients, and a chosen leader
+\* Chosen leader node sends a message "m1" to all replicas besides itself, the replicas receive the message and remove it from the sent_queue
 
 EXTENDS Integers, Sequences, TLC
+CONSTANT clientSet, chosenLeader
 
 (* --algorithm echo
 
 variables
 clientRequest = "";
 lastSent = "";
-clientTerminated = FALSE;
-clientSet = {"c1", "c2", "c3"};
-chosenLeader = "c1"; \* Implement leader lock later
+clientTerminated = [c \in clientSet |-> FALSE];
+\*chosenLeader = "c1"; \* Implement leader lock later
 sent_queue = <<>>;
 sender = "";
 sentTo = "";
@@ -22,7 +24,9 @@ define
 \*        /\ (serverResponse # "" /\ lastSent # "") =>
 \*           (serverResponse = lastSent) \* This will fail with 2 rounds
     SystemTermination == clientTerminated
-    TerminationCorrectness == SystemTermination => FALSE
+\*    TerminationCorrectness == SystemTermination => FALSE
+       TerminationCorrectness == <>(\A c \in clientSet : clientTerminated[c])
+
 \*      TerminationCorrectness == clientTerminated
 
 end define;
@@ -48,36 +52,37 @@ begin
                         print <<"Client " \o self \o " sent " \o msg_struct.m \o " to " \o c \o ". Seq# -> " \o ToString(globalSeqNum)>>;
                     end with;
                 end while;
+            clientTerminated[self] := TRUE;
         end if;
     WaitForEcho:
-        await Len(sent_queue) = 2;
-        print <<"Sent Queue: " \o ToString(Len(sent_queue))>>;
-    clientTerminated := TRUE;
+        await (sent_queue # <<>> /\ Head(sent_queue).to = self);
+        sent_queue := Tail(sent_queue);
+        print <<"Sent Queue now: " \o ToString(Len(sent_queue))>>;
+    clientTerminated[self] := TRUE;
 end process;
 
 end algorithm; *)
-\* BEGIN TRANSLATION (chksum(pcal) = "1909b2e" /\ chksum(tla) = "e1a70e9b")
-VARIABLES pc, clientRequest, lastSent, clientTerminated, clientSet, 
-          chosenLeader, sent_queue, sender, sentTo, messageSet, globalSeqNum
+\* BEGIN TRANSLATION (chksum(pcal) = "b2507f5c" /\ chksum(tla) = "1cd13f3e")
+VARIABLES pc, clientRequest, lastSent, clientTerminated, sent_queue, sender, 
+          sentTo, messageSet, globalSeqNum
 
 (* define statement *)
 SystemTermination == clientTerminated
-TerminationCorrectness == SystemTermination => FALSE
+
+   TerminationCorrectness == <>(\A c \in clientSet : clientTerminated[c])
 
 VARIABLES sending, toSend, clientID, msg_struct
 
-vars == << pc, clientRequest, lastSent, clientTerminated, clientSet, 
-           chosenLeader, sent_queue, sender, sentTo, messageSet, globalSeqNum, 
-           sending, toSend, clientID, msg_struct >>
+vars == << pc, clientRequest, lastSent, clientTerminated, sent_queue, sender, 
+           sentTo, messageSet, globalSeqNum, sending, toSend, clientID, 
+           msg_struct >>
 
 ProcSet == (clientSet)
 
 Init == (* Global variables *)
         /\ clientRequest = ""
         /\ lastSent = ""
-        /\ clientTerminated = FALSE
-        /\ clientSet = {"c1", "c2", "c3"}
-        /\ chosenLeader = "c1"
+        /\ clientTerminated = [c \in clientSet |-> FALSE]
         /\ sent_queue = <<>>
         /\ sender = ""
         /\ sentTo = ""
@@ -97,9 +102,8 @@ Broadcast(self) == /\ pc[self] = "Broadcast"
                          ELSE /\ pc' = [pc EXCEPT ![self] = "WaitForEcho"]
                               /\ UNCHANGED toSend
                    /\ UNCHANGED << clientRequest, lastSent, clientTerminated, 
-                                   clientSet, chosenLeader, sent_queue, sender, 
-                                   sentTo, messageSet, globalSeqNum, sending, 
-                                   clientID, msg_struct >>
+                                   sent_queue, sender, sentTo, messageSet, 
+                                   globalSeqNum, sending, clientID, msg_struct >>
 
 BroadcastLoop(self) == /\ pc[self] = "BroadcastLoop"
                        /\ IF toSend[self] # {}
@@ -110,21 +114,21 @@ BroadcastLoop(self) == /\ pc[self] = "BroadcastLoop"
                                        /\ toSend' = [toSend EXCEPT ![self] = toSend[self] \ {c}]
                                        /\ PrintT(<<"Client " \o self \o " sent " \o msg_struct'[self].m \o " to " \o c \o ". Seq# -> " \o ToString(globalSeqNum')>>)
                                   /\ pc' = [pc EXCEPT ![self] = "BroadcastLoop"]
-                             ELSE /\ pc' = [pc EXCEPT ![self] = "WaitForEcho"]
+                                  /\ UNCHANGED clientTerminated
+                             ELSE /\ clientTerminated' = [clientTerminated EXCEPT ![self] = TRUE]
+                                  /\ pc' = [pc EXCEPT ![self] = "WaitForEcho"]
                                   /\ UNCHANGED << sent_queue, globalSeqNum, 
                                                   toSend, msg_struct >>
-                       /\ UNCHANGED << clientRequest, lastSent, 
-                                       clientTerminated, clientSet, 
-                                       chosenLeader, sender, sentTo, 
+                       /\ UNCHANGED << clientRequest, lastSent, sender, sentTo, 
                                        messageSet, sending, clientID >>
 
 WaitForEcho(self) == /\ pc[self] = "WaitForEcho"
-                     /\ Len(sent_queue) = 2
-                     /\ PrintT(<<"Sent Queue: " \o ToString(Len(sent_queue))>>)
-                     /\ clientTerminated' = TRUE
+                     /\ (sent_queue # <<>> /\ Head(sent_queue).to = self)
+                     /\ sent_queue' = Tail(sent_queue)
+                     /\ PrintT(<<"Sent Queue now: " \o ToString(Len(sent_queue'))>>)
+                     /\ clientTerminated' = [clientTerminated EXCEPT ![self] = TRUE]
                      /\ pc' = [pc EXCEPT ![self] = "Done"]
-                     /\ UNCHANGED << clientRequest, lastSent, clientSet, 
-                                     chosenLeader, sent_queue, sender, sentTo, 
+                     /\ UNCHANGED << clientRequest, lastSent, sender, sentTo, 
                                      messageSet, globalSeqNum, sending, toSend, 
                                      clientID, msg_struct >>
 
@@ -145,5 +149,5 @@ Termination == <>(\A self \in ProcSet: pc[self] = "Done")
 
 =============================================================================
 \* Modification History
-\* Last modified Tue Oct 21 16:24:33 PDT 2025 by daineyip
+\* Last modified Wed Oct 22 22:53:09 PDT 2025 by daineyip
 \* Created Tue Oct 21 15:11:32 PDT 2025 by daineyip
