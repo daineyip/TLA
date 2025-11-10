@@ -2,7 +2,7 @@
 \* This is a basic broadcast protocol
 \* Capable of handling an arbitrary number of replicas, with a client who sends the initial message to an arbitrary "selected" leader replica
 \* Chosen leader replica sends a message "m1" to all replicas besides itself, the replicas receive the message and remove it from the sent_queue
-\* Replicas all send message back to the client
+\* ///TODO Replicas all send message back to the client
 
 EXTENDS Integers, Sequences, TLC
 CONSTANT replicaSet, chosenLeader
@@ -229,5 +229,5 @@ Termination == <>(\A self \in ProcSet: pc[self] = "Done")
 
 =============================================================================
 \* Modification History
-\* Last modified Mon Nov 10 00:51:32 PST 2025 by daineyip
+\* Last modified Mon Nov 10 00:57:36 PST 2025 by daineyip
 \* Created Fri Oct 24 11:32:49 PDT 2025 by daineyip
